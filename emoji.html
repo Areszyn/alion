@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Darshi Randi</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      position: relative;
+      touch-action: none;
+    }
+
+    body {
+      background: url('https://i.imgur.com/nWo5Sb0.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+    }
+
+    .emoji {
+      position: absolute;
+      pointer-events: none;
+      user-select: none;
+      animation: floatUp 2s linear forwards;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    @keyframes floatUp {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+    }
+
+    #emojiCount {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 24px;
+      z-index: 10;
+      text-shadow: 0 0 5px #000;
+    }
+
+    .swipe-indicator {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: pulse 1.5s infinite;
+      opacity: 0;
+    }
+
+    @keyframes pulse {
+      0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+      50% { opacity: 0.5; }
+      100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<div id="emojiCount">Emojis: 0</div>
+<audio id="tapSound" src="https://assets.mixkit.co/sfx/preview/mixkit-positive-interface-beep-221.mp3" preload="auto"></audio>
+
+<script>
+const config = {
+  emojis: ['❤️','✨','🔥','🌟','😄','💥','🥳','🤩','💫','🎉','👑','💎','⚡','🎊','🧨','💖','🎈','🪐','🍀','🎵','🍕','🍓','☀️','🌈','🌸','🌺','🌴','⭐','💡','🦄','🧊','📸','⚽','🏀','🏈','⚾','🎾','🎮','🎧','🎤','🎷','🎸','🥁','🪘','🕺','💃','🧠','🫀','👀','👅','👣','👽','🤖','💻','🖥️','📱','📀','🧭','⏰','🎯','🔋','🔌','📡','💡','🛸','🚀','✈️','🚁','🚗','🚙','🛵','🏍️','🚜','🛴','🛹','🚨','🎆','🌌','🌠','🌃','🌉'],
+  maxEmojis: 500,
+  spawnCount: 2,
+  swipeSensitivity: 5
+};
+
+let emojiCount = 0;
+let lastX = 0;
+let lastY = 0;
+let isSwiping = false;
+let canvas, ctx;
+
+const emojiCountDisplay = document.getElementById("emojiCount");
+const tapSound = document.getElementById("tapSound");
+
+function init() {
+  setupCanvas();
+  setupEventListeners();
+  spawnInitialEmojis();
+}
+
+function setupCanvas() {
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+  resizeCanvas();
+
+  const particles = [];
+  const particleCount = window.innerWidth < 600 ? 30 : 100;
+
+  for (let i = 0; i < particleCount; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      size: Math.random() * 3 + 1,
+      speedX: Math.random() * 0.5 - 0.25,
+      speedY: Math.random() * 0.5 - 0.25,
+      color: `hsla(${Math.floor(Math.random() * 360)}, 70%, 50%, ${Math.random() * 0.3 + 0.1})`
+    });
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      p.x += p.speedX;
+      p.y += p.speedY;
+      if (p.x < 0 || p.x > canvas.width) p.speedX *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.speedY *= -1;
+    });
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+
+function spawnInitialEmojis() {
+  for (let i = 0; i < 20; i++) {
+    setTimeout(() => {
+      spawnEmoji(
+        Math.random() * window.innerWidth,
+        Math.random() * window.innerHeight,
+        1
+      );
+    }, i * 100);
+  }
+}
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function setupEventListeners() {
+  document.addEventListener("mousedown", handleStart);
+  document.addEventListener("mousemove", handleMove);
+  document.addEventListener("mouseup", handleEnd);
+  document.addEventListener("touchstart", handleStart);
+  document.addEventListener("touchmove", handleMove);
+  document.addEventListener("touchend", handleEnd);
+  window.addEventListener("resize", resizeCanvas);
+}
+
+function spawnEmoji(x, y, count = 1) {
+  if (emojiCount > config.maxEmojis) return;
+
+  for (let i = 0; i < count; i++) {
+    const emoji = document.createElement("div");
+    emoji.className = "emoji";
+    emoji.textContent = config.emojis[Math.floor(Math.random() * config.emojis.length)];
+
+    const size = Math.random() * 40 + 20;
+    emoji.style.fontSize = `${size}px`;
+    emoji.style.left = `${x + (Math.random() * 40 - 20)}px`;
+    emoji.style.top = `${y + (Math.random() * 40 - 20)}px`;
+    emoji.style.color = getRandomColor();
+    emoji.style.animationDuration = `${Math.random() * 1 + 1.5}s`;
+
+    document.body.appendChild(emoji);
+    setTimeout(() => emoji.style.opacity = '1', 10);
+    setTimeout(() => {
+      emoji.remove();
+      emojiCount--;
+      emojiCountDisplay.textContent = `Emojis: ${emojiCount}`;
+    }, 2000);
+
+    emojiCount++;
+    emojiCountDisplay.textContent = `Emojis: ${emojiCount}`;
+  }
+
+  try {
+    tapSound.currentTime = 0;
+    tapSound.play();
+  } catch (e) {
+    console.log("Sound playback error:", e);
+  }
+}
+
+function handleStart(e) {
+  const x = e.clientX || e.touches[0].clientX;
+  const y = e.clientY || e.touches[0].clientY;
+  lastX = x;
+  lastY = y;
+  isSwiping = true;
+
+  const indicator = document.createElement("div");
+  indicator.className = "swipe-indicator";
+  indicator.style.left = `${x}px`;
+  indicator.style.top = `${y}px`;
+  document.body.appendChild(indicator);
+
+  setTimeout(() => indicator.remove(), 1500);
+
+  spawnEmoji(x, y, config.spawnCount);
+}
+
+function handleMove(e) {
+  if (!isSwiping) return;
+
+  const x = e.clientX || e.touches[0].clientX;
+  const y = e.clientY || e.touches[0].clientY;
+  const dx = x - lastX;
+  const dy = y - lastY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  if (distance > config.swipeSensitivity) {
+    spawnEmoji(x, y, Math.floor(distance / 10));
+    lastX = x;
+    lastY = y;
+  }
+}
+
+function handleEnd() {
+  isSwiping = false;
+}
+
+function getRandomColor() {
+  return `hsl(${Math.floor(Math.random() * 360)}, 100%, 70%)`;
+}
+
+init();
+</script>
+</body>
+</html>
